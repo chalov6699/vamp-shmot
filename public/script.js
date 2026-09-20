@@ -34,6 +34,15 @@ const brandView = document.getElementById('brand-view');
 const cartView = document.getElementById('cart-view');
 const contactsView = document.getElementById('contacts-view');
 const adminView = document.getElementById('admin-view');
+const myOrdersView = document.getElementById('my-orders-view');
+
+const ORDER_STATUS_LABELS = {
+    new: 'Новый',
+    processing: 'В обработке',
+    shipped: 'Отправлен',
+    done: 'Выполнен',
+    cancelled: 'Отменён'
+};
 
 /* ============================================================
    API
@@ -55,7 +64,7 @@ async function api(path, options = {}) {
    ============================================================ */
 function hideAllViews() {
     mainView.style.display = 'none';
-    [productView, brandsView, brandView, cartView, contactsView, adminView]
+    [productView, brandsView, brandView, cartView, contactsView, adminView, myOrdersView]
         .forEach(v => v.classList.remove('active'));
 }
 function showCatalog() {
@@ -80,6 +89,34 @@ async function showBrands() {
     brandsView.classList.add('active');
     await loadBrands();
     renderBrands();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+async function showMyOrders() {
+    if (!currentUser) { openAuthModal(); return; }
+    hideAllViews();
+    myOrdersView.classList.add('active');
+    const box = document.getElementById('my-orders-content');
+    box.innerHTML = '<p style="color:#888;">Загрузка...</p>';
+    try {
+        const myOrders = await api('/orders/my');
+        if (myOrders.length === 0) {
+            box.innerHTML = '<div class="cart-empty">У вас пока нет заказов 📦<br><br><button class="btn" onclick="showCatalog()">Перейти в каталог</button></div>';
+        } else {
+            box.innerHTML = myOrders.map(o => `
+                <div class="cart-item" style="flex-direction:column;align-items:flex-start;gap:8px;">
+                    <div style="display:flex;justify-content:space-between;width:100%;flex-wrap:wrap;gap:8px;">
+                        <strong>Заказ №${o.id}</strong>
+                        <span>${new Date(o.created_at).toLocaleDateString('ru-RU')}</span>
+                        <span>${ORDER_STATUS_LABELS[o.status] || o.status}</span>
+                    </div>
+                    <div class="cart-meta">${o.items.map(i => `${i.name} (${i.size}) ×${i.qty}`).join(', ')}</div>
+                    <div class="cart-price">${o.total.toLocaleString('ru-RU')} ₽</div>
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        box.innerHTML = '<p style="color:#888;">Не удалось загрузить заказы</p>';
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 async function showBrand(id) {
@@ -325,6 +362,7 @@ function renderUserArea() {
             ? `<button class="user-btn admin-btn" onclick="openAdmin()">Админка</button>` : '';
         area.innerHTML = `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
             <div class="user-info">Привет, <strong>${currentUser.name}</strong></div>
+            <button class="user-btn" onclick="showMyOrders()">Мои заказы</button>
             ${adminBtn}
             <button class="user-btn" onclick="doLogout()">Выйти</button>
         </div>`;
@@ -685,7 +723,7 @@ function renderAdminOrders() {
             <td>
                 <select onchange="updateOrderStatus(${o.id}, this.value)">
                     ${['new','processing','shipped','done','cancelled'].map(s =>
-                        `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}
+                        `<option value="${s}" ${s === o.status ? 'selected' : ''}>${ORDER_STATUS_LABELS[s]}</option>`).join('')}
                 </select>
             </td>
         </tr>
